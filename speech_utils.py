@@ -45,7 +45,7 @@ def read_sphere_wav(file_name):
     wav_data = np.zeros(shape=[sample_count], dtype=np.int32)
 
     for i in range(sample_count):
-        wav_data[i] = ctypes.c_int16(raw_data[2 * i + 1] << 8).value + ctypes.c_int16(raw_data[2 * i]).value
+        wav_data[i] = ctypes.c_int16(ord(raw_data[2 * i + 1]) << 8).value + ctypes.c_int16(ord(raw_data[2 * i])).value
 
     header_list = raw_header.split("\n")
     sphere_header = {}
@@ -134,3 +134,95 @@ def synthesis_speech(noisy_speech, ideal_mask, win_type, win_len, shift_len, syn
         #     clean_speech[i*shift_len: (i-1)*shift_len+win_len] *= 0.5
     window_sum = np.where(window_sum < 1e-2, 1e-2, window_sum)
     return clean_speech / window_sum
+
+
+'''
+          |    old    |  new
+----------+-----------+-----------
+Say "old" |    TP     |     FP
+Say "new" |    FN     |     TN
+
+HIT rate            = TP/(TP+FN)
+False Alarm rate    = FP/(FP+TN)
+
+'''
+def calc_decision_matrix(predict_y, grand_truth):
+    TP = np.sum(np.sum(np.where(predict_y == 1 and grand_truth == 1, 1, 0)))  # true positive
+    FP = np.sum(np.sum(np.where(predict_y == 1 and grand_truth == 0, 1, 0)))  # false positive
+    FN = np.sum(np.sum(np.where(predict_y == 0 and grand_truth == 1, 1, 0)))  # false negative
+    TN = np.sum(np.sum(np.where(predict_y == 0 and grand_truth == 0, 1, 0)))  # true negative
+    return TP, FP, TN, FN
+
+
+def calc_hit_rate(predict_ibm, ibm):
+    TP, FP, TN, FN = calc_decision_matrix(predict_ibm, ibm)
+    return TP / (TP + FN)
+
+
+def calc_false_alarm(predict_ibm, ibm):
+    TP, FP, TN, FN = calc_decision_matrix(predict_ibm, ibm)
+    return FP / (FP + TN)
+
+
+def get_one_third_octave_bands(min_freq=None, max_freq=None):
+    if min_freq is None and max_freq is None:
+        fcenter = 2. ** (np.arange(-18, 14, 1) / 3.) * (10 ** 3)
+    else:
+        n = np.ceil(3. * np.log2(max_freq / min_freq)) + 1.
+        fcenter = min_freq * 2 ** (1./3.) * np.arange(0., n, 1.)
+    fd = 2. ** (1. / 6.)
+    fupper = fcenter * fd
+    flower = fcenter / fd
+    return flower, fupper
+
+
+def get_octave_bands(min_freq=None, max_freq=None):
+    if min_freq is None and max_freq is None:
+        fcenter = 2. ** np.arange(-6, 5, 1) * (10 ** 3)
+    else:
+        n = np.ceil(np.log2(max_freq / min_freq)) + 1.
+        fcenter = min_freq * 2. ** np.arange(0., n, 1.)
+    fd = 2. ** (1. / 2.)
+    fupper = fcenter * fd
+    flower = fcenter / fd
+    return flower, fupper
+
+
+def calc_stoi_from_wav(clean_speech, degraded_speech):
+    pass
+
+
+def get_fft_octave_mat(nfft, sr, min_freq, max_freq):
+    fft_bins = np.linspace(0, sr//2, nfft//2+1)
+    fft_center_freq = (fft_bins[:-1] + fft_bins[1:]) / 2.
+    octave_lower, octave_upper = get_one_third_octave_bands(min_freq, max_freq)
+    wts = np.zeros((len(octave_lower), len(fft_center_freq)), dtype=np.float32)
+    j = 0
+    for i in range(len(fft_center_freq)):
+        while not (octave_lower[j] < fft_center_freq[i] < octave_upper[j]):
+            j += 1
+        wts[j, i] = 1
+
+    return wts
+
+
+def calc_stoi_from_spec(clean_spec, degraded_spec, analysis_len=30):
+    freq_bins = np.size(clean_spec, 0)
+    frames = np.size(clean_spec, 1)
+    x = np.zeros((freq_bins, frames - analysis_len + 1, analysis_len), dtype=np.float32)
+    y = np.zeros((freq_bins, frames - analysis_len + 1, analysis_len), dtype=np.float32)
+    for j in range(0, freq_bins):
+        for m in range(analysis_len - 1, frames, 1):
+            x[j, m] = clean_spec[j, m - analysis_len + 1:m + 1]
+            y[j, m] = degraded_spec[j, m - analysis_len + 1:m + 1]
+            y[j, m] = np.minimum(np.linalg.norm(x[j,m,:])/np.linalg.norm(y[j,m,:])*y[j,m,:],
+                                 (1.+np.power(10., 15./20.))*x[j,m,:])  # y is normalized and clipped
+    x_mean = np.mean(x, axis=(0, 1))
+    y_mean = np.mean(y, axis=(0, 1))
+    score = 0.
+    for j in range(0, freq_bins):
+        for m in range(analysis_len - 1, frames, 1):
+            score += np.dot(x[j, m, :] - x_mean, y[j, m, :] - y_mean) / \
+                     (np.linalg.norm(x[j, m, :] - x_mean) * np.linalg.norm(y[j, m, :] - y_mean))
+    score /= (freq_bins * analysis_len)
+    return score

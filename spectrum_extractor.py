@@ -1,7 +1,7 @@
-# coding = utf-8
+# coding=utf-8
 from matplotlib import pyplot
 import numpy as np
-from read_sphere_wav import read_sphere_wav
+from scipy.io import wavfile
 
 
 def spectrum_extractor(x, win_len, shift_len, win_type, is_log):
@@ -31,7 +31,7 @@ def spectrum_extractor(x, win_len, shift_len, win_type, is_log):
 
 
 if __name__ == '__main__':
-    wav_data, wav_header = read_sphere_wav(u"/media/neo/000C6F0F00042510/Doctor/dataset/TIMIT/train/dr1/fcjf0/sa1.wav")
-    spect = spectrum_extractor(wav_data, 320, 160, 'hamming', True)
+    sr, wav_data = wavfile.read(u"clean.wav")
+    spect = spectrum_extractor(wav_data, 160, 80, 'hamming', True)
     pyplot.imshow(spect)
     pyplot.show()

@@ -13,7 +13,7 @@ def read_sphere_wav(file_name):
     wav_data = np.zeros(shape=[sample_count], dtype=np.int32)
 
     for i in range(sample_count):
-        wav_data[i] = ctypes.c_int16(raw_data[2 * i + 1] << 8).value + ctypes.c_int16(raw_data[2 * i]).value
+        wav_data[i] = ctypes.c_int16(ord(raw_data[2 * i + 1]) << 8).value + ctypes.c_int16(ord(raw_data[2 * i])).value
 
     header_list = raw_header.split("\n")
     sphere_header = {}

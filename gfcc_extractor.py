@@ -1,8 +1,9 @@
 # coding = utf-8
 import numpy as np
-from read_sphere_wav import  read_sphere_wav
+from scipy.io import wavfile
 from feature_extractor import cochleagram_extractor
 from matplotlib import  pyplot as plt
+from speech_utils import read_sphere_wav
 
 
 def gfcc_extractor(cochleagram, gf_channel, cc_channels):
@@ -17,12 +18,13 @@ def gfcc_extractor(cochleagram, gf_channel, cc_channels):
 
 
 if __name__ == '__main__':
-    wav_data, wav_header = read_sphere_wav(u"/media/neo/000C6F0F00042510/Doctor/dataset/TIMIT/train/dr1/fcjf0/sa1.wav")
-    cochlea = cochleagram_extractor(wav_data, 320, 160, 64, 'hanning')
+    wav_data, wav_header = read_sphere_wav(u"sa1.wav")
+    sr = 16000
+    cochlea = cochleagram_extractor(wav_data, sr, 320, 160, 64, 'hanning')
     gfcc = gfcc_extractor(cochlea, 64, 31)
     plt.figure()
     plt.subplot(211)
     plt.imshow(np.flipud(cochlea))
     plt.subplot(212)
-    plt.imshow(gfcc[1:, :])
+    plt.imshow(np.flipud(gfcc))
     plt.show()

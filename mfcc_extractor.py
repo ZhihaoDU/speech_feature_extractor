@@ -2,6 +2,7 @@
 import numpy as np
 from read_sphere_wav import read_sphere_wav
 from matplotlib import pyplot
+import matplotlib.pyplot as plt
 from scipy.io import wavfile
 
 
@@ -11,6 +12,14 @@ def hz2mel(f):
 
 def mel2hz(z):
     return 700. * (np.power(10., z / 2595.) - 1.)
+
+
+def get_dct_coeff(in_channel, out_channel):
+    dct_coef = np.zeros((out_channel, in_channel), dtype=np.float32)
+    for i in range(out_channel):
+        n = np.linspace(0, in_channel - 1, in_channel)
+        dct_coef[i, :] = np.cos((2 * n + 1) * i * np.pi / (2 * in_channel))
+    return dct_coef
 
 
 def get_fft_mel_mat(nfft, sr=8000, nfilts=None, width=1.0, minfrq=20, maxfrq=None, constamp=0):
@@ -92,14 +101,22 @@ def mfcc_extractor(xx, sr, win_len, shift_len, mel_channel, dct_channel, win_typ
 
 if __name__ == '__main__':
     sr, wav_data = wavfile.read(u"clean.wav")
-    mfcc, spect = mfcc_extractor(wav_data, sr, sr/1000*20, sr/1000*10, 24, 13, 'hanning', True)
-    pyplot.subplot(211)
-    pyplot.imshow(np.log(spect))
-    pyplot.subplot(212)
+    mfcc, spect = mfcc_extractor(wav_data, sr, sr/1000*20, sr/1000*10, 52, 26, 'hanning', True)
+    # pyplot.subplot(211)
+    # pyplot.imshow(np.log(spect))
+    # pyplot.subplot(212)
     pyplot.imshow(mfcc)
     pyplot.show()
+    # pyplot.subplot(311)
     # fft2mel = get_fft_mel_mat(320, 16000, 64)
     # pyplot.imshow(fft2mel)
+    # plt.subplot(312)
+    # plt.hold(True)
+    # for i in range(24):
+    #     plt.plot(fft2mel[40 + i, :])
+    # pyplot.subplot(313)
+    # dct_coeff = get_dct_coeff(64,24)
+    # pyplot.imshow(dct_coeff)
     # pyplot.show()
 
 

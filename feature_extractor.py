@@ -146,14 +146,14 @@ def erb_space(low_freq=50, high_freq=8000, n=64):
 
 
 def make_erb_filters(sr, num_channels, low_freq):
-    t = 1 / sr
+    t = 1. / sr
     cf = erb_space(low_freq, sr // 2, num_channels)
 
     ear_q = 9.26449
     min_bw = 24.7
     order = 4
 
-    erb = np.power(np.power(cf/ear_q, order) + (min_bw ** order), 1/order)
+    erb = np.power(np.power(cf/ear_q, order) + (min_bw ** order), 1. / order)
     b = 1.019 * 2 * np.pi * erb
 
     a0 = t
@@ -167,13 +167,13 @@ def make_erb_filters(sr, num_channels, low_freq):
     a13 = -(2 * t * np.cos(2*cf*np.pi*t) / np.exp(b*t) + 2 * np.sqrt(3-2**1.5) * t * np.sin(2*cf*np.pi*t) / np.exp(b*t))/2
     a14 = -(2 * t * np.cos(2*cf*np.pi*t) / np.exp(b*t) - 2 * np.sqrt(3-2**1.5) * t * np.sin(2*cf*np.pi*t) / np.exp(b*t))/2
 
-    p1 = (-2*np.exp(4j*cf*np.pi*t)*t + 2*np.exp(-(b*t) + 2j*cf*np.pi*t) * t * \
+    p1 = (-2*np.exp(4j*cf*np.pi*t)*t + 2*np.exp(-(b*t) + 2j*cf*np.pi*t) * t *
          (np.cos(2*cf*np.pi*t) - np.sqrt(3 - 2**(3/2))* np.sin(2*cf*np.pi*t)))
-    p2 = (-2*np.exp(4j*cf*np.pi*t)*t + 2*np.exp(-(b*t) + 2j*cf*np.pi*t) * t * \
+    p2 = (-2*np.exp(4j*cf*np.pi*t)*t + 2*np.exp(-(b*t) + 2j*cf*np.pi*t) * t *
          (np.cos(2*cf*np.pi*t) + np.sqrt(3 - 2**(3/2))* np.sin(2*cf*np.pi*t)))
-    p3 = (-2*np.exp(4j*cf*np.pi*t)*t + 2*np.exp(-(b*t) + 2j*cf*np.pi*t) * t * \
+    p3 = (-2*np.exp(4j*cf*np.pi*t)*t + 2*np.exp(-(b*t) + 2j*cf*np.pi*t) * t *
          (np.cos(2*cf*np.pi*t) - np.sqrt(3 + 2**(3/2))* np.sin(2*cf*np.pi*t)))
-    p4 = (-2*np.exp(4j*cf*np.pi*t)*t + 2*np.exp(-(b*t) + 2j*cf*np.pi*t) * t * \
+    p4 = (-2*np.exp(4j*cf*np.pi*t)*t + 2*np.exp(-(b*t) + 2j*cf*np.pi*t) * t *
          (np.cos(2*cf*np.pi*t) + np.sqrt(3 + 2**(3/2))* np.sin(2*cf*np.pi*t)))
     p5 = np.power(-2 / np.exp(2*b*t) - 2 * np.exp(4j*cf*np.pi*t) + 2 * (1 + np.exp(4j*cf*np.pi*t)) / np.exp(b*t), 4)
     gain = np.abs(p1 * p2 * p3 * p4 / p5)
@@ -211,8 +211,8 @@ def erb_frilter_bank(x, fcoefs):
     return output
 
 
-def cochleagram_extractor(xx, win_len, shift_len, channel_number, win_type):
-    fcoefs, f = make_erb_filters(16000, channel_number, 50)
+def cochleagram_extractor(xx, sr, win_len, shift_len, channel_number, win_type):
+    fcoefs, f = make_erb_filters(sr, channel_number, 50)
     fcoefs = np.flipud(fcoefs)
     xf = erb_frilter_bank(xx, fcoefs)
 
@@ -247,7 +247,7 @@ def fft_to_cochleagram(sr, min_freq, max_freq, win_len, channel_number):
     wts = np.zeros((nfilts, nfft // 2 + 1))
     ear_q = 9.26449
     min_bw = 24.7
-    order = 1
+    order = 1.
     cfreqs = -(ear_q * min_bw) + np.exp(np.arange(1, nfilts+1, 1) * (-np.log(max_freq+ear_q*min_bw) + np.log(min_freq + ear_q*min_bw)) / nfilts) * (max_freq + ear_q*min_bw)
     cfreqs = np.flipud(cfreqs)
     GTord = 4
@@ -317,7 +317,38 @@ def get_fft_bark_mat(sr, fft_len, barks, min_frq=20, max_frq=None):
     return wts
 
 
-def ams_extractor(x, sr, win_len, shift_len, barks, inner_win, inner_shift, win_type, method_version):
+def cal_triangle_window(min_freq, max_freq, nfft, window_number, low_freq, high_freq):
+    fft_freq_bins = np.linspace(min_freq, max_freq, nfft)
+    center_freq = np.linspace(low_freq, high_freq, window_number+2)
+    wts = np.zeros(shape=(window_number, nfft))
+    for i in range(window_number):
+        fs = center_freq[[i+0, i+1, i+2]]
+        fs = fs[1] + 1.0 * (fs - fs[1])
+        loslope = (fft_freq_bins - fs[0]) / (fs[1] - fs[0])
+        hislope = (fs[2] - fft_freq_bins) / (fs[2] - fs[1])
+        wts[i, :] = np.maximum(0, np.minimum(loslope, hislope))
+    return wts
+
+
+def ams_extractor(x, sr, win_len, shift_len, order=1, decimate_coef=1./4.):
+    from scipy.signal import hilbert
+    envelope = np.abs(hilbert(x))
+    for i in range(order-1):
+        envelope = np.abs(hilbert(envelope))
+    envelope = envelope * decimate_coef
+    frames = (len(envelope) - win_len) // shift_len
+    hanning_window = np.hanning(win_len)
+    ams_feature = np.zeros(shape=(15, frames))
+    wts = cal_triangle_window(0, sr//2, win_len, 15, 15.6, 400)
+    for i in range(frames):
+        one_frame = x[i*shift_len:i*shift_len+win_len]
+        one_frame = one_frame * hanning_window
+        frame_fft = np.abs(np.fft.fft(one_frame, win_len))
+        ams_feature[:,i] = np.matmul(wts, frame_fft)
+    return ams_feature
+
+
+def unknown_feature_extractor(x, sr, win_len, shift_len, barks, inner_win, inner_shift, win_type, method_version):
     x_spectrum = stft_extractor(x, win_len, shift_len, win_type)
     coef = get_fft_bark_mat(sr, win_len, barks, 20, sr//2)
     bark_spect = np.matmul(coef, x_spectrum)

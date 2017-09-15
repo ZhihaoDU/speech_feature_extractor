@@ -3,17 +3,18 @@
 import numpy as np
 from feature_extractor import log_power_spectrum_extractor
 from matplotlib import pylab
+import matplotlib.pyplot as plt
 from scikits.talkbox import lpc
 from scipy.signal import lfilter, lfilter_zi, lfiltic
 from scipy.io import wavfile
 
 
 def freq2bark(f):
-    return 7*np.log(f/650+np.sqrt(np.power(1+(f/650), 2)))
+    return 7.*np.log(f/650.+np.sqrt(np.power(1.+(f/650.), 2.)))
 
 
 def bark2freq(b):
-    return 650*np.sinh(b/7)
+    return 650.*np.sinh(b/7.)
 
 
 def get_fft_bark_mat(sr, fft_len, barks, min_frq=20, max_frq=None):
@@ -55,6 +56,11 @@ def postaud(x, fmax, fbtype=None):
     fsq = bancfhz * bancfhz
     ftmp = fsq + 1.6e5
     eql = ((fsq/ftmp)**2) * ((fsq + 1.44e6)/(fsq + 9.61e6))
+    '''
+    plt.figure()
+    plt.plot(eql)
+    plt.show()
+    '''
     eql = eql.reshape(np.size(eql), 1)
     z = np.repeat(eql, nframes, axis=1) * x
     z = z ** (1./3.)
@@ -103,6 +109,16 @@ def rasta_plp_extractor(x, sr, plp_order=0, do_rasta=True):
     spec = log_power_spectrum_extractor(x, int(sr*0.02), int(sr*0.01), 'hamming', False)
     bark_filters = int(np.ceil(freq2bark(sr//2)))
     wts = get_fft_bark_mat(sr, int(sr*0.02), bark_filters)
+    '''
+    plt.figure()
+    plt.subplot(211)
+    plt.imshow(wts)
+    plt.subplot(212)
+    plt.hold(True)
+    for i in range(18):
+        plt.plot(wts[i, :])
+    plt.show()
+    '''
     bark_spec = np.matmul(wts, spec)
     if do_rasta:
         bark_spec = np.where(bark_spec == 0.0, np.finfo(float).eps, bark_spec)
@@ -112,14 +128,15 @@ def rasta_plp_extractor(x, sr, plp_order=0, do_rasta=True):
     post_spec = postaud(bark_spec, sr/2.)
     if plp_order > 0:
         lpcas = do_lpc(post_spec, plp_order)
+        # lpcas = do_lpc(spec, plp_order) # just for test
     else:
         lpcas = post_spec
     return lpcas
 
 if __name__ == '__main__':
     sr, wav_data = wavfile.read("clean.wav")
-    lpcas = rasta_plp_extractor(wav_data, sr, 12, True)
+    lpcas = rasta_plp_extractor(wav_data, sr, 16, True)
     pylab.figure()
-    pylab.subplot(211)
+    #pylab.subplot(211)
     pylab.imshow(lpcas)
     pylab.show()

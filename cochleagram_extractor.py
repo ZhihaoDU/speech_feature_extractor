@@ -19,14 +19,14 @@ def erb_space(low_freq=50, high_freq=8000, n=64):
 
 
 def make_erb_filters(fs, num_channels, low_freq):
-    t = 1 / fs
+    t = 1. / fs
     cf = erb_space(low_freq, fs // 2, num_channels)
 
     ear_q = 9.26449
     min_bw = 24.7
     order = 4
 
-    erb = np.power(np.power(cf/ear_q, order) + (min_bw ** order), 1/order)
+    erb = np.power(np.power(cf/ear_q, order) + (min_bw ** order), 1./order)
     b = 1.019 * 2 * np.pi * erb
 
     a0 = t
@@ -40,13 +40,13 @@ def make_erb_filters(fs, num_channels, low_freq):
     a13 = -(2 * t * np.cos(2*cf*np.pi*t) / np.exp(b*t) + 2 * np.sqrt(3-2**1.5) * t * np.sin(2*cf*np.pi*t) / np.exp(b*t))/2
     a14 = -(2 * t * np.cos(2*cf*np.pi*t) / np.exp(b*t) - 2 * np.sqrt(3-2**1.5) * t * np.sin(2*cf*np.pi*t) / np.exp(b*t))/2
 
-    p1 = (-2*np.exp(4j*cf*np.pi*t)*t + 2*np.exp(-(b*t) + 2j*cf*np.pi*t) * t * \
+    p1 = (-2*np.exp(4j*cf*np.pi*t)*t + 2*np.exp(-(b*t) + 2j*cf*np.pi*t) * t *
          (np.cos(2*cf*np.pi*t) - np.sqrt(3 - 2**(3/2))* np.sin(2*cf*np.pi*t)))
-    p2 = (-2*np.exp(4j*cf*np.pi*t)*t + 2*np.exp(-(b*t) + 2j*cf*np.pi*t) * t * \
+    p2 = (-2*np.exp(4j*cf*np.pi*t)*t + 2*np.exp(-(b*t) + 2j*cf*np.pi*t) * t *
          (np.cos(2*cf*np.pi*t) + np.sqrt(3 - 2**(3/2))* np.sin(2*cf*np.pi*t)))
-    p3 = (-2*np.exp(4j*cf*np.pi*t)*t + 2*np.exp(-(b*t) + 2j*cf*np.pi*t) * t * \
+    p3 = (-2*np.exp(4j*cf*np.pi*t)*t + 2*np.exp(-(b*t) + 2j*cf*np.pi*t) * t *
          (np.cos(2*cf*np.pi*t) - np.sqrt(3 + 2**(3/2))* np.sin(2*cf*np.pi*t)))
-    p4 = (-2*np.exp(4j*cf*np.pi*t)*t + 2*np.exp(-(b*t) + 2j*cf*np.pi*t) * t * \
+    p4 = (-2*np.exp(4j*cf*np.pi*t)*t + 2*np.exp(-(b*t) + 2j*cf*np.pi*t) * t *
          (np.cos(2*cf*np.pi*t) + np.sqrt(3 + 2**(3/2))* np.sin(2*cf*np.pi*t)))
     p5 = np.power(-2 / np.exp(2*b*t) - 2 * np.exp(4j*cf*np.pi*t) + 2 * (1 + np.exp(4j*cf*np.pi*t)) / np.exp(b*t), 4)
     gain = np.abs(p1 * p2 * p3 * p4 / p5)
@@ -84,8 +84,8 @@ def erb_frilter_bank(x, fcoefs):
     return output
 
 
-def cochleagram_extractor(xx, win_len, shift_len, channel_number, win_type):
-    fcoefs, f = make_erb_filters(16000, channel_number, 50)
+def cochleagram_extractor(xx, sr, win_len, shift_len, channel_number, win_type):
+    fcoefs, f = make_erb_filters(sr, channel_number, 50)
     fcoefs = np.flipud(fcoefs)
     xf = erb_frilter_bank(xx, fcoefs)
 
@@ -110,10 +110,9 @@ def cochleagram_extractor(xx, win_len, shift_len, channel_number, win_type):
     return cochleagram
 
 
-def cochleagram_fft_coefs(win_len, channel_number):
-    sr = 16000
-    min_freq = 50
-    max_freq = 8000
+def cochleagram_fft_coefs(sr, win_len, channel_number):
+    min_freq = 50.0
+    max_freq = sr//2
     max_len = win_len
     nfilts = channel_number
     nfft = win_len
@@ -121,10 +120,10 @@ def cochleagram_fft_coefs(win_len, channel_number):
     wts = np.zeros((nfilts, nfft // 2 + 1))
     ear_q = 9.26449
     min_bw = 24.7
-    order = 1
+    order = 1.0
     cfreqs = -(ear_q * min_bw) + np.exp(np.arange(1, nfilts+1, 1) * (-np.log(max_freq+ear_q*min_bw) + np.log(min_freq + ear_q*min_bw)) / nfilts) * (max_freq + ear_q*min_bw)
     cfreqs = np.flipud(cfreqs)
-    GTord = 4
+    GTord = 4.0
     ucirc = np.exp(2j * np.pi * np.arange(0, nfft//2+1, 1)/nfft)
 
     for i in range(nfilts):
@@ -135,7 +134,7 @@ def cochleagram_fft_coefs(win_len, channel_number):
         theta = 2 * np.pi * cf / sr
         pole = r * np.exp(1j * theta)
 
-        t = 1 / sr
+        t = 1. / sr
 
         a11 = -(2 * t * np.cos(2 * cf * np.pi * t) / np.exp(b * t) + 2 * np.sqrt(3 + 2 ** 1.5) * t * np.sin(
             2 * cf * np.pi * t) / np.exp(b * t)) / 2
@@ -167,12 +166,16 @@ def cochleagram_fft_coefs(win_len, channel_number):
     return wts
 
 if __name__ == '__main__':
-    wav_data, wav_header = read_sphere_wav(u"/media/neo/000C6F0F00042510/Doctor/dataset/TIMIT/train/dr1/fcjf0/sa1.wav")
-    cochlea = cochleagram_extractor(wav_data, 320, 160, 64, 'hanning')
-    #plt.imshow(np.flipud((cochlea)))
-    #plt.show()
-    fft2gammatone_coef = cochleagram_fft_coefs(320, 64)
+    wav_data, wav_header = read_sphere_wav(u'sa1.wav')
+    sr = 16000
+    #wav_data, wav_header = read_sphere_wav(u"/media/neo/000C6F0F00042510/Doctor/dataset/TIMIT/train/dr1/fcjf0/sa1.wav")
+    cochlea = cochleagram_extractor(wav_data, sr, 320, 160, 64, 'hanning')
+    plt.imshow(np.sqrt(np.flipud(cochlea)))
+    plt.show()
+    fft2gammatone_coef = cochleagram_fft_coefs(sr, 320, 64)
     spect = spectrum_extractor(wav_data, 320, 160, 'hanning', False)
+    plt.imshow(np.flipud(np.sqrt(np.matmul(fft2gammatone_coef, spect))))
+    plt.show()
     # min = fft2gammatone_coef.min()
     # max = fft2gammatone_coef.max()
     # color_map = cm.RdYlGn
@@ -187,14 +190,13 @@ if __name__ == '__main__':
     # for i in range(10):
     #     plt.hold(True)
     #     plt.plot(fft2gammatone_coef[i, :])
-    plt.subplot(411)
-    plt.imshow(fft2gammatone_coef)
-    plt.subplot(412)
-    plt.imshow(spect)
-    plt.subplot(413)
-    plt.imshow(np.flipud(np.log(np.matmul(fft2gammatone_coef[:, :160], spect[:160, :]))))
-    plt.subplot(414)
-    plt.imshow(np.power(np.flipud(cochlea), 1./3))
-    plt.show()
+    # plt.subplot(211)
+    # plt.imshow(fft2gammatone_coef)
+    # plt.subplot(212)
+    # plt.hold(True)
+    # for i in range(24):
+    #     plt.plot(fft2gammatone_coef[40+i,:])
+    #
+    # plt.show()
 
 
