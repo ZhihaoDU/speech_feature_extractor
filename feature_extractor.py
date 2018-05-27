@@ -12,6 +12,23 @@ def mel2hz(z):
     return 700. * (np.power(10., z / 2595.) - 1.)
 
 
+def get_window(win_len, win_type):
+    if win_type == 'hanning':
+        win_len += 2
+        window = np.hanning(win_len)
+        window = window[1: -1]
+    elif win_type == 'hamming':
+        win_len += 2
+        window = np.hamming(win_len)
+        window = window[1: -1]
+    elif win_type == 'triangle':
+        window = 1. - (np.abs(win_len + 1. - 2.*np.arange(0., win_len+2., 1.)) / (win_len+1.))
+        window = window[1: -1]
+    else:
+        window = np.ones(win_len)
+    return window
+
+
 def get_fft_mel_mat(nfft, sr=8000, nfilts=None, width=1.0, minfrq=20, maxfrq=None, constamp=0):
     if nfilts is None:
         nfilts = nfft
@@ -50,20 +67,13 @@ def mfcc_extractor(xx, sr, win_len, shift_len, mel_channel, dct_channel, win_typ
     w = np.reshape(w, newshape=(dct_channel, 1))
 
     samples = x.shape[0]
-    frames = (samples - win_len) // shift_len
+    frames = 1 + (samples - win_len) // shift_len
     stft = np.zeros((win_len, frames), dtype=np.complex64)
     spectrum = np.zeros((win_len // 2 + 1, frames), dtype=np.float32)
 
     mfcc = np.zeros((dct_channel, frames), dtype=np.float32)
 
-    if win_type == 'hanning':
-        window = np.hanning(win_len)
-    elif win_type == 'hamming':
-        window = np.hamming(win_len)
-    elif win_type == 'triangle':
-        window = (1-(np.abs(win_len - 1 - 2*np.arange(1, win_len+1, 1))/(win_len+1)))
-    else:
-        window = np.ones(win_len)
+    window = get_window(win_len, win_type)
 
     for i in range(frames):
         one_frame = x[i * shift_len: i * shift_len + win_len]
@@ -86,21 +96,16 @@ def mfcc_extractor(xx, sr, win_len, shift_len, mel_channel, dct_channel, win_typ
         ddtm /= 3.0
         mfcc = np.row_stack((mfcc[:, 4:frames-4], dtm[:, 4:frames-4], ddtm[:, 4:frames-4]))
 
-    return mfcc, spectrum
+    return mfcc
 
 
 def log_power_spectrum_extractor(x, win_len, shift_len, win_type, is_log=False):
     samples = x.shape[0]
-    frames = (samples - win_len) // shift_len
+    frames = 1 + (samples - win_len) // shift_len
     stft = np.zeros((win_len, frames), dtype=np.complex64)
     spect = np.zeros((win_len // 2 + 1, frames), dtype=np.float64)
 
-    if win_type == 'hanning':
-        window = np.hanning(win_len)
-    elif win_type == 'hamming':
-        window = np.hamming(win_len)
-    elif win_type == 'rectangle':
-        window = np.ones(win_len)
+    window = get_window(win_len, win_type)
 
     for i in range(frames):
         one_frame = x[i*shift_len: i*shift_len+win_len]
@@ -114,24 +119,21 @@ def log_power_spectrum_extractor(x, win_len, shift_len, win_type, is_log=False):
     return spect
 
 
-def stft_extractor(x, win_len, shift_len, win_type):
+def stft_extractor(x, win_len, shift_len, win_type, n_fft=None):
+    if n_fft is None:
+        n_fft = win_len
     samples = x.shape[0]
-    frames = (samples - win_len) // shift_len
-    stft = np.zeros((win_len, frames), dtype=np.complex64)
-    spect = np.zeros((win_len // 2 + 1, frames), dtype=np.complex64)
+    frames = 1 + (samples - win_len) // shift_len
+    stft = np.zeros((n_fft, frames), dtype=np.complex64)
+    spect = np.zeros((n_fft // 2 + 1, frames), dtype=np.complex64)
 
-    if win_type == 'hanning':
-        window = np.hanning(win_len)
-    elif win_type == 'hamming':
-        window = np.hamming(win_len)
-    elif win_type == 'rectangle':
-        window = np.ones(win_len)
+    window = get_window(win_len, win_type)
 
     for i in range(frames):
         one_frame = x[i*shift_len: i*shift_len+win_len]
         windowed_frame = np.multiply(one_frame, window)
-        stft[:, i] = np.fft.fft(windowed_frame, win_len)
-        spect[:, i] = stft[: win_len//2+1, i]
+        stft[:, i] = np.fft.fft(windowed_frame, n_fft)
+        spect[:, i] = stft[: n_fft//2+1, i]
 
     return spect
 
@@ -211,29 +213,38 @@ def erb_frilter_bank(x, fcoefs):
     return output
 
 
-def cochleagram_extractor(xx, sr, win_len, shift_len, channel_number, win_type):
+def cochleagram_extractor_wdl(xx, sr, win_len, shift_len, channel_number, win_type):
     fcoefs, f = make_erb_filters(sr, channel_number, 50)
     fcoefs = np.flipud(fcoefs)
     xf = erb_frilter_bank(xx, fcoefs)
 
-    if win_type == 'hanning':
-        window = np.hanning(channel_number)
-    elif win_type == 'hamming':
-        window = np.hamming(channel_number)
-    elif win_type == 'triangle':
-        window = (1 - (np.abs(channel_number - 1 - 2 * np.arange(1, channel_number + 1, 1)) / (channel_number + 1)))
-    else:
-        window = np.ones(channel_number)
-    window = window.reshape((channel_number, 1))
+    window = get_window(win_len, win_type)
+    window = window.reshape((1, win_len))
 
     xe = np.power(xf, 2.0)
     frames = 1 + ((np.size(xe, 1)-win_len) // shift_len)
     cochleagram = np.zeros((channel_number, frames))
     for i in range(frames):
-        one_frame = np.multiply(xe[:, i*shift_len:i*shift_len+win_len], np.repeat(window, win_len, 1))
+        one_frame = np.multiply(xe[:, i*shift_len:i*shift_len+win_len], np.repeat(window, channel_number, 0))
+        cochleagram[:, i] = np.sum(one_frame, 1)
+    return cochleagram
+
+
+def cochleagram_extractor(xx, sr, win_len, shift_len, channel_number, win_type):
+    fcoefs, f = make_erb_filters(sr, channel_number, 50)
+    fcoefs = np.flipud(fcoefs)
+    xf = erb_frilter_bank(xx, fcoefs)
+
+    window = get_window(win_len, win_type)
+    window = window.reshape((1, win_len))
+
+    xe = np.power(xf, 2.0)
+    frames = 1 + ((np.size(xe, 1)-win_len) // shift_len)
+    cochleagram = np.zeros((channel_number, frames))
+    for i in range(frames):
+        one_frame = np.multiply(xe[:, i*shift_len:i*shift_len+win_len], np.repeat(window, channel_number, 0))
         cochleagram[:, i] = np.sqrt(np.mean(one_frame, 1))
 
-    # c1 = np.where(c1 == 0.0, np.finfo(float).eps, c1)
     cochleagram = np.where(cochleagram == 0.0, np.finfo(float).eps, cochleagram)
     cochleagram = np.power(cochleagram, 1./3)
     return cochleagram
@@ -250,7 +261,7 @@ def fft_to_cochleagram(sr, min_freq, max_freq, win_len, channel_number):
     order = 1.
     cfreqs = -(ear_q * min_bw) + np.exp(np.arange(1, nfilts+1, 1) * (-np.log(max_freq+ear_q*min_bw) + np.log(min_freq + ear_q*min_bw)) / nfilts) * (max_freq + ear_q*min_bw)
     cfreqs = np.flipud(cfreqs)
-    GTord = 4
+    GTord = 4.
     ucirc = np.exp(2j * np.pi * np.arange(0, nfft//2+1, 1)/nfft)
 
     for i in range(nfilts):
@@ -261,7 +272,7 @@ def fft_to_cochleagram(sr, min_freq, max_freq, win_len, channel_number):
         theta = 2 * np.pi * cf / sr
         pole = r * np.exp(1j * theta)
 
-        t = 1 / sr
+        t = 1. / sr
 
         a11 = -(2 * t * np.cos(2 * cf * np.pi * t) / np.exp(b * t) + 2 * np.sqrt(3 + 2 ** 1.5) * t * np.sin(
             2 * cf * np.pi * t) / np.exp(b * t)) / 2
@@ -330,20 +341,42 @@ def cal_triangle_window(min_freq, max_freq, nfft, window_number, low_freq, high_
     return wts
 
 
+def calc_normalized_autocorrelation(x, win_len, shift_len, Tn):
+    from numpy.linalg import norm
+    frame_number = 1 + (len(x) - win_len) // shift_len
+    A = np.zeros(shape=(win_len // Tn, frame_number))
+    for i in range(frame_number):
+        one_frame = x[i*shift_len: i*shift_len+win_len]
+        for t in range(1, win_len // Tn-1):
+            n = np.arange(t*Tn, win_len, Tn)
+            A[t, i] = np.sum(one_frame[n]*one_frame[n - t*Tn]) / (norm(one_frame[n]) * norm(one_frame[n - t*Tn]))
+    return A
+
+
+def calc_average_instaneous_frequence(ac_matrix, win_duration_ms):
+    frames = np.size(ac_matrix, 1)
+    average_if = np.zeros(frames)
+    for i in range(frames):
+        zero_cross_times = np.sum(np.less(ac_matrix[:-2, i] * ac_matrix[1:-1, i], 0))
+        average_if[i] = 1. / (win_duration_ms / zero_cross_times)
+    return average_if
+
+
 def ams_extractor(x, sr, win_len, shift_len, order=1, decimate_coef=1./4.):
     from scipy.signal import hilbert
     envelope = np.abs(hilbert(x))
     for i in range(order-1):
         envelope = np.abs(hilbert(envelope))
     envelope = envelope * decimate_coef
-    frames = (len(envelope) - win_len) // shift_len
+    frames = 1 + (len(envelope) - win_len) // shift_len
     hanning_window = np.hanning(win_len)
     ams_feature = np.zeros(shape=(15, frames))
-    wts = cal_triangle_window(0, sr//2, win_len, 15, 15.6, 400)
+    wts = cal_triangle_window(0, sr//2, win_len//2+1, 15, 15.6, 401)
     for i in range(frames):
-        one_frame = x[i*shift_len:i*shift_len+win_len]
+        one_frame = envelope[i*shift_len:i*shift_len+win_len]
         one_frame = one_frame * hanning_window
         frame_fft = np.abs(np.fft.fft(one_frame, win_len))
+        frame_fft = frame_fft[:win_len//2+1]
         ams_feature[:,i] = np.matmul(wts, frame_fft)
     return ams_feature
 
@@ -379,6 +412,18 @@ def rasta_filt(x):
     return y
 
 
+def get_equal_loudness(nfpts, fmax, fbtype=None):
+    if fbtype is None:
+        fbtype = 'bark'
+    if fbtype == 'bark':
+        bancfhz = bark2freq(np.linspace(0, freq2bark(fmax), nfpts))
+    fsq = bancfhz * bancfhz
+    ftmp = fsq + 1.6e5
+    eql = ((fsq/ftmp)**2) * ((fsq + 1.44e6)/(fsq + 9.61e6))
+    eql = eql.reshape(np.size(eql), 1)
+    return eql
+
+
 def postaud(x, fmax, fbtype=None):
     if fbtype is None:
         fbtype = 'bark'
@@ -397,11 +442,11 @@ def postaud(x, fmax, fbtype=None):
     return y
 
 
-def do_lpc(spec, order, error_normal=False):
-    coeff, error, k = lpc(spec, order, axis=0)
+def do_lpc(spec, order, axis=0, error_normal=False):
+    coeff, error, k = lpc(spec, order, axis=axis)
     if error_normal:
         error = np.reshape(error, (1, len(error)))
-        error = np.repeat(error, order+1, axis=0)
+        error = np.repeat(error, order+1, axis=axis)
         return coeff / error
     else:
         return coeff[1:, :]
@@ -434,10 +479,10 @@ def lpc2cep(a, nout=None):
     return c
 
 
-def rasta_plp_extractor(x, sr, plp_order=0, do_rasta=True):
-    spec = log_power_spectrum_extractor(x, int(sr*0.02), int(sr*0.01), 'hamming', False)
+def rasta_plp_extractor(x, sr, win_len, shift_len, plp_order=0, do_rasta=True):
+    spec = log_power_spectrum_extractor(x, win_len, shift_len, 'hanning', False)
     bark_filters = int(np.ceil(freq2bark(sr//2)))
-    wts = get_fft_bark_mat(sr, int(sr*0.02), bark_filters)
+    wts = get_fft_bark_mat(sr, win_len, bark_filters)
     bark_spec = np.matmul(wts, spec)
     if do_rasta:
         bark_spec = np.where(bark_spec == 0.0, np.finfo(float).eps, bark_spec)
@@ -445,8 +490,43 @@ def rasta_plp_extractor(x, sr, plp_order=0, do_rasta=True):
         rasta_log_bark_spec = rasta_filt(log_bark_spec)
         bark_spec = np.exp(rasta_log_bark_spec)
     post_spec = postaud(bark_spec, sr/2.)
+    # post_spec = bark_spec
     if plp_order > 0:
         lpcas = do_lpc(post_spec, plp_order)
     else:
         lpcas = post_spec
     return lpcas
+
+
+def enframe_extractor(x, win_len, shift_len, win_type, delta_size=0):
+    frame_num = 1 + (len(x)- win_len) // shift_len
+    frames = np.zeros([win_len, frame_num], dtype=np.float32)
+    window = get_window(win_len, win_type)
+    for i in range(frame_num):
+        frames[:, i] = x[i*shift_len: i*shift_len+win_len] * window
+    if delta_size > 0:
+        frames = frames[:, delta_size: -delta_size]
+    return frames
+
+
+def MfccGFAmsPlp_feature_extractor(xx, sr, win_len, win_shift, win_type, include_delta, arma_m=0):
+    mfcc = mfcc_extractor(xx, sr, win_len, win_shift, 64, 31, win_type, False)
+    cochleagram = cochleagram_extractor_wdl(xx, sr, win_len, win_shift, 64, win_type)
+    cochleagram = np.power(cochleagram, 1./15.)
+    ams = ams_extractor(xx, sr, win_len, win_shift)
+    rasta_plp = rasta_plp_extractor(xx, sr, win_len, win_shift, plp_order=12, do_rasta=True)
+    features = np.concatenate([mfcc, cochleagram, ams, rasta_plp], axis=0)
+    if include_delta:
+        delta_features = 2 * features[:, 4:] + features[:, 3:-1] - features[:, 1:-3] - 2 * features[:, 0:-4]
+        delta_features = 1. / 3. * delta_features
+        features = np.concatenate((features[:, 2:-2], delta_features), axis=0)
+    if arma_m > 0:
+        arma_feature = np.zeros_like(features)
+        arma_feature[:, :arma_m] = features[:, :arma_m]
+        for i in range(arma_m, features.shape[1]-arma_m):
+            arma_feature[:, i] = features[:, i]
+            for j in range(1, arma_m+1):
+                arma_feature[:, i] += (arma_feature[:, i-j] + features[:, i+j])
+            arma_feature[:, i] /= (2. * arma_m + 1)
+        features = arma_feature[:, arma_m: -arma_m]
+    return features
