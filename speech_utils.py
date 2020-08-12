@@ -39,7 +39,7 @@ def random_mix_speech_noise(clean_speech, noise, snr, noise_from, noise_to):
     to_mix_noise = to_mix_noise / norm(to_mix_noise) * norm(to_mix_speech) / np.sqrt(10.0 ** (0.1 * snr))
     check_snr = 10*np.log10(np.square(norm(to_mix_speech)/norm(to_mix_noise)))
     if abs(check_snr - snr) > 1e-6:
-        print "FATAL ERROR: snr calculate error!!!!"
+        print("FATAL ERROR: snr calculate error!!!!")
         exit(-1)
     mix = to_mix_noise + to_mix_speech
     return mix, to_mix_speech
@@ -349,7 +349,7 @@ def coch_synthesis(noisy, mask, sr, win_len, shift_len, frame_offset):
 def get_pesq_mos(speech, degraded, dlabel):
     rand_number = np.random.randint(0, 100)
     if len(speech) != len(degraded):
-        print "Fatal Error: the length is mismatch: speech: %d, degraded: %d" % (len(speech), len(degraded))
+        print("Fatal Error: the length is mismatch: speech: %d, degraded: %d" % (len(speech), len(degraded)))
         exit(-1)
     write_wav_to_file(speech, 16000, "/data/duzhihao/tmp/%s/clean_%d.wav" % (dlabel, rand_number))
     write_wav_to_file(degraded, 16000, "/data/duzhihao/tmp/%s/degraded_%d.wav" % (dlabel, rand_number))
@@ -359,7 +359,7 @@ def get_pesq_mos(speech, degraded, dlabel):
     try:
         pesq_mos = float(output.split(' ')[-1])
     except:
-        print "Fatal Error: the output of pesq is:", output
+        print("Fatal Error: the output of pesq is:", output)
         return None
     return pesq_mos
 
@@ -516,7 +516,7 @@ def calc_stoi(speech, degraded, fs, analysis_len=30):
 
 def print_with_time(str):
     str_time = time.strftime('%Y-%m-%d %X', time.localtime())
-    print "%s %s" % (str_time, str)
+    print("%s %s" % (str_time, str))
 
 
 if __name__ == '__main__':
@@ -525,6 +525,6 @@ if __name__ == '__main__':
     fs, ibm_speech = wavfile.read('synthesis_test/ibm_coch_synthesis.wav')
     fs, irm_speech = wavfile.read('synthesis_test/irm_coch_synthesis.wav')
     from numpy.linalg import norm
-    print 'noisy stio: %.6f' % calc_stoi(speech / norm(speech), degraded / norm(degraded), fs)
-    print 'IBM stio: %.6f' % calc_stoi(speech / norm(speech), ibm_speech / norm(ibm_speech), fs)
-    print 'IRM stio: %.6f' % calc_stoi(speech / norm(speech), irm_speech / norm(irm_speech), fs)
+    print('noisy stio: %.6f' % calc_stoi(speech / norm(speech), degraded / norm(degraded), fs))
+    print('IBM stio: %.6f' % calc_stoi(speech / norm(speech), ibm_speech / norm(ibm_speech), fs))
+    print('IRM stio: %.6f' % calc_stoi(speech / norm(speech), irm_speech / norm(irm_speech), fs))

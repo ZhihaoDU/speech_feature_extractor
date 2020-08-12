@@ -12,7 +12,7 @@ def SNR(x1, x2):
     return 20 * np.log10(norm(x1) / norm(x2))
 
 
-def signal_by_db(x1, x2, snr, handle_method):
+def mix_by_db(x1, x2, snr, handle_method):
     x1 = x1.astype(np.int32)
     x2 = x2.astype(np.int32)
     l1 = x1.shape[0]
@@ -43,20 +43,20 @@ if __name__ == '__main__':
     spect = log_power_spectrum_extractor(speech_data, 320, 160, 'hanning', True)
     plt.subplot(311)
     plt.imshow(spect)
-    noisy_speech = signal_by_db(speech_data, noise_data, 5, 'cut')
+    noisy_speech = mix_by_db(speech_data, noise_data, 5, 'cut')
     spect = log_power_spectrum_extractor(noisy_speech, 320, 160, 'hanning', True)
     plt.subplot(312)
     plt.imshow(spect)
-    noisy_speech = signal_by_db(speech_data, noise_data, 0, 'cut')
+    noisy_speech = mix_by_db(speech_data, noise_data, 0, 'cut')
     spect = log_power_spectrum_extractor(noisy_speech, 320, 160, 'hanning', True)
     plt.subplot(313)
     plt.imshow(spect)
     plt.figure()
-    noisy_speech = signal_by_db(speech_data, noise_data, -5, 'cut')
+    noisy_speech = mix_by_db(speech_data, noise_data, -5, 'cut')
     spect = log_power_spectrum_extractor(noisy_speech, 320, 160, 'hanning', True)
     plt.subplot(211)
     plt.imshow(spect)
-    noisy_speech = signal_by_db(speech_data, noise_data, -10, 'cut')
+    noisy_speech = mix_by_db(speech_data, noise_data, -10, 'cut')
     spect = log_power_spectrum_extractor(noisy_speech, 320, 160, 'hanning', True)
     plt.subplot(212)
     plt.imshow(spect)
