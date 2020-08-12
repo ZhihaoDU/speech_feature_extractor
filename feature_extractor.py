@@ -1,7 +1,7 @@
 # coding = utf-8
 import numpy as np
 from scipy.signal import lfilter, lfilter_zi, lfiltic
-from scikits.talkbox import lpc
+from scikits.talkbox.linpred.levinson_lpc import lpc
 
 
 def hz2mel(f):
